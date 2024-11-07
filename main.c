@@ -1,31 +1,76 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 //Define uma array com os nomes dos 32 registradores MIPS para busca
-    const char *mips_registers[32] = {
-        // 0: Constant 0
-        "$zero",
-        // 1: Reserved for the assembler
-        "$at",
-        // 2 - 3: Result Registers
-        "$v0", "$v1",
-        // 4 - 7: Argument Registers [0..3]
-        "$a0", "$a1", "$a2", "$a3",
-        // 8 - 15, 24 - 25: Temporary Registers [0..9]
-        "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7","$t8", "$t9",
-        // 16 - 23: Saved Registers [0..7]
-        "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
-        // 26 - 27: Kernel Registers [0..1]
-        "$k0", "$k1",
-        // 28: Global Data Pointer
-        "$gp",
-        // 29: Stack Pointer
-        "$sp",
-        // 30: Frame Pointer
-        "$fp",
-        // 31: Return Address
-        "$ra"
-    };
+const char *mips_registers[32] = {
+    // 0: Sempre contém o valor zero
+    "$zero",
+    // 1: Usado pelo montador para auxiliar nas expansões de pseudo-instruções.
+    "$at",
+    // 2 - 3: Registradores de valor de retorno de funções. (quando ultrapassa 32 bits o $v1 é usado)
+    "$v0", "$v1",
+    // 4 - 7: Registradores de argumentos. (para passagem a procedimentos)
+    "$a0", "$a1", "$a2", "$a3",
+    // 8 - 17: Registradores temporários usados para armazenamento temporário.
+    "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7","$t8", "$t9",
+    // 18 - 25: Registradores salvos usados para armazenar valores que precisam ser preservados durante a chamada de funções.
+    "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
+    // 26 - 27: Registradores reservados para o kernel.
+    "$k0", "$k1",
+    // 28: Ponto de base global para dados estáticos.
+    "$gp",
+    // 29: Ponteiro de pilha.
+    "$sp",
+    // 30: Ponteiro de quadro (frame) usado para referência a variáveis locais e temporárias.
+    "$fp",
+    // 31: Registrador de retorno de endereço usado para armazenar o endereço de retorno após uma chamada de função.
+    "$ra"
+};
+
+int mips_registers_vals[32] = { 0 };
+
+void ADDI(char*regSave, char*regOp, int imediate){
+    int regop_index = find_register_index(regOp);
+    int regop_val = mips_registers_vals[regop_index];
+    int regSave_index = find_register_index(regSave);
+    int regSave_val = mips_registers_vals[regSave_index];
+    mips_registers_vals[regSave_index] = regop_val + imediate;
+}
+void ADD(char*regSave, char*regOp1, char*regOp2){
+    int regop1_index = find_register_index(regOp1);
+    int regop1_val = mips_registers_vals[regop1_index];
+    int regop2_index = find_register_index(regOp2);
+    int regop2_val = mips_registers_vals[regop2_index];
+    int regSave_index = find_register_index(regSave);
+    int regSave_val = mips_registers_vals[regSave_index];
+    printf("%d", regSave_index);
+    mips_registers_vals[regSave_index] = regop1_val + regop2_val;
+}
+
+void MUL(char*regSave, char*regOp1, char*regOp2){
+    int regop1_index = find_register_index(regOp1);
+    int regop1_val = mips_registers_vals[regop1_index];
+    int regop2_index = find_register_index(regOp2);
+    int regop2_val = mips_registers_vals[regop2_index];
+    int regSave_index = find_register_index(regSave);
+    int regSave_val = mips_registers_vals[regSave_index];
+    printf("%d", regSave_index);
+    mips_registers_vals[regSave_index] = regop1_val * regop2_val;
+}
+
+int find_register_index(char *input){
+    int index_val;
+    int i=0;
+    while(mips_registers[i]){
+        if(strcmp(input,mips_registers[i]) == 0){
+            index_val = i;
+            break;
+        }
+        ++i;
+    }
+    return index_val; 
+}
 
 void get_tokens(char *input) {
     //Remover o \n da string (se tiver)
@@ -56,16 +101,21 @@ void get_tokens(char *input) {
         strcpy(reg3, token);
     }
 
-    //Separado operação, e os 3 registradores enviados
-    printf("Operation: %s\n", operation);
-    printf("Register 1: %s\n", reg1);
-    printf("Register 2: %s\n", reg2);
-    printf("Register 3: %s\n", reg3);
+    if(strcmp(operation, "ADD") == 0){
+        ADD(reg1, reg2, reg3);
+    }
+    if(strcmp(operation, "ADDI") == 0){
+        int imediate = atoi(reg3);
+        ADDI(reg1, reg2, imediate);
+    }
+    if(strcmp(operation, "MUL") == 0){
+        MUL(reg1, reg2, reg3);
+    }
 }
 
 void print_registers() {
     for (int i = 0; i < 32; i++) {
-        printf("Register %d: %s\n", i, mips_registers[i]);
+        printf("Register %s Valor: %d\n", mips_registers[i], mips_registers_vals[i]);
     }
 }
 
@@ -74,9 +124,12 @@ int main() {
     char buffer[30];
     printf("Digite seu comando: ");
     fgets(buffer, sizeof(buffer), stdin);
-
+    
+    mips_registers_vals[8] = 5; //Adiciona no registrador $t0 o numero 5
+    mips_registers_vals[9] = 2; //Adiciona no registrador $t1 o numero 2
     //Chama a função para separar a operação e os registradores
     get_tokens(buffer);
-
+    //Printa os registradores
+    print_registers();
     return 0;
 }
