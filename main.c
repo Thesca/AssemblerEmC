@@ -29,6 +29,9 @@ const char *mips_registers[32] = {
 };
 
 int mips_registers_vals[32] = { 0 };
+
+int memory[1024] = { 0 };  // Simulação de memória com 1024 posições
+
 int find_register_index(char *input){
     int index_val;
     int i=0;
@@ -41,6 +44,68 @@ int find_register_index(char *input){
     }
     return index_val; 
 }
+
+void LW(char *regSave, char *regBase, int offset) {
+    printf("[DEBUG] LW: regSave=%s regBase=%s offset=%d\n",
+           regSave, regBase, offset);
+    int regSaveIndex = find_register_index(regSave);
+    printf("1");
+    int regBaseIndex = find_register_index(regBase);
+    printf("2");
+
+    // Logs de depuração
+    printf("[DEBUG] LW: regSave=%s (index=%d), regBase=%s (index=%d), offset=%d\n",
+           regSave, regSaveIndex, regBase, regBaseIndex, offset);
+
+    int address = mips_registers_vals[regBaseIndex] + offset;
+    printf("[DEBUG] LW: Calculated address = %d\n", address);
+
+    // Verificação de limites
+    if (address % 4 != 0 || address / 4 >= 1024 || address < 0) {
+        printf("Erro: endereço fora dos limites da memória.\n");
+        return;
+    }
+
+    mips_registers_vals[regSaveIndex] = memory[address / 4];
+    printf("Carregado valor %d de memory[%d] para %s\n",
+           mips_registers_vals[regSaveIndex], address / 4, regSave);
+}
+
+
+void SW(char *regSave, char *regBase, int offset) {
+    int regSaveIndex = find_register_index(regSave);
+    int regBaseIndex = find_register_index(regBase);
+
+    // Logs de depuração
+    printf("[DEBUG] SW: regSave=%s (index=%d), regBase=%s (index=%d), offset=%d\n",
+           regSave, regSaveIndex, regBase, regBaseIndex, offset);
+
+    int address = mips_registers_vals[regBaseIndex] + offset;
+    printf("[DEBUG] SW: Calculated address = %d\n", address);
+
+    // Verificação de limites
+    if (address % 4 != 0 || address / 4 >= 1024 || address < 0) {
+        printf("Erro: endereço fora dos limites da memória.\n");
+        return;
+    }
+
+    memory[address / 4] = mips_registers_vals[regSaveIndex];
+    printf("Armazenado valor %d de %s em memory[%d]\n",
+           mips_registers_vals[regSaveIndex], regSave, address / 4);
+}
+
+
+void BEQ(char *reg1, char *reg2, int offset) {
+    int reg1Index = find_register_index(reg1);
+    int reg2Index = find_register_index(reg2);
+    if (mips_registers_vals[reg1Index] == mips_registers_vals[reg2Index]) {
+        printf("Branch taken: jumping by offset %d\n", offset);
+        // Aqui você pode implementar a lógica para ajustar o program counter (PC)
+    } else {
+        printf("Branch not taken\n");
+    }
+}
+
 void ADDI(char*regSave, char*regOp, int imediate){
     int regop_index = find_register_index(regOp);
     int regop_val = mips_registers_vals[regop_index];
@@ -140,10 +205,24 @@ void get_tokens(char *input) {
     // tive que adicionar esse if pois LUI usa dois argumentos apenas e nisso dando o comando
     // LUI $t9 255
     // o valor imediato ia para o re2 e não reg3
-    if (strcmp(operation, "LUI") == 0) {
-        immediate = atoi(reg2);  // Para LUI, o imediato está em reg2
+    // Verifica o formato "offset(base)" para LW e SW
+    if (strcmp(operation, "LW") == 0 || strcmp(operation, "SW") == 0) {
+        // Extrai offset e registrador base do formato "offset(base)"
+        sscanf(reg2, "%d(%[^)])", &immediate, reg2);
+    } else if (strcmp(operation, "LUI") == 0) {
+        // LUI usa apenas dois argumentos, então o imediato vem de reg2
+        immediate = atoi(reg2);
     } else {
-        immediate = atoi(reg3);  // Para outras instruções, o imediato está em reg3
+        // Para outras instruções, o imediato está em reg3
+        immediate = atoi(reg3);
+    }
+
+    if (strcmp(operation, "LW") == 0) {
+        LW(reg1, reg2, immediate);
+    } else if (strcmp(operation, "SW") == 0) {
+        SW(reg1, reg2, immediate);
+    } else if (strcmp(operation, "BEQ") == 0) {
+        BEQ(reg1, reg2, immediate);
     }
 
     if (strcmp(operation, "ADD") == 0) {
@@ -181,6 +260,7 @@ int main() {
     mips_registers_vals[8] = 5;  // $t0 = 5
     mips_registers_vals[9] = 2;  // $t1 = 2
     mips_registers_vals[10] = 8; // $t2 = 8
+    memory[3] = 100;             // Valor de exemplo na memória, em posição 3 (offset 12 bytes)
 
     while (1) { // Loop infinito
         printf("Digite seu comando (ou 'exit' para sair): ");
