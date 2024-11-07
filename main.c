@@ -29,7 +29,18 @@ const char *mips_registers[32] = {
 };
 
 int mips_registers_vals[32] = { 0 };
-
+int find_register_index(char *input){
+    int index_val;
+    int i=0;
+    while(mips_registers[i]){
+        if(strcmp(input,mips_registers[i]) == 0){
+            index_val = i;
+            break;
+        }
+        ++i;
+    }
+    return index_val; 
+}
 void ADDI(char*regSave, char*regOp, int imediate){
     int regop_index = find_register_index(regOp);
     int regop_val = mips_registers_vals[regop_index];
@@ -59,17 +70,40 @@ void MUL(char*regSave, char*regOp1, char*regOp2){
     mips_registers_vals[regSave_index] = regop1_val * regop2_val;
 }
 
-int find_register_index(char *input){
-    int index_val;
-    int i=0;
-    while(mips_registers[i]){
-        if(strcmp(input,mips_registers[i]) == 0){
-            index_val = i;
-            break;
-        }
-        ++i;
-    }
-    return index_val; 
+void XORI(char *regSave, char *regOp, int immediate) {
+    int regOpIndex = find_register_index(regOp);
+    int regSaveIndex = find_register_index(regSave);
+    mips_registers_vals[regSaveIndex] = mips_registers_vals[regOpIndex] ^ immediate;
+}
+
+void SLTI(char *regSave, char *regOp, int immediate) {
+    int regOpIndex = find_register_index(regOp);
+    int regSaveIndex = find_register_index(regSave);
+    mips_registers_vals[regSaveIndex] = mips_registers_vals[regOpIndex] < immediate ? 1 : 0;
+}
+
+void LUI(char *regSave, int immediate) {
+    int regSaveIndex = find_register_index(regSave);
+    mips_registers_vals[regSaveIndex] = (immediate & 0xFFFF) << 16; // Garante que apenas os 16 bits inferiores são deslocados
+    printf("LUI aplicado: registrador %s recebe valor %d\n", regSave, mips_registers_vals[regSaveIndex]); // Verificação
+}
+
+void ANDI(char *regSave, char *regOp, int immediate) {
+    int regOpIndex = find_register_index(regOp);
+    int regSaveIndex = find_register_index(regSave);
+    mips_registers_vals[regSaveIndex] = mips_registers_vals[regOpIndex] & immediate;
+}
+
+void ORI(char *regSave, char *regOp, int immediate) {
+    int regOpIndex = find_register_index(regOp);
+    int regSaveIndex = find_register_index(regSave);
+    mips_registers_vals[regSaveIndex] = mips_registers_vals[regOpIndex] | immediate;
+}
+
+void ADDIU(char *regSave, char *regOp, int immediate) {
+    int regOpIndex = find_register_index(regOp);
+    int regSaveIndex = find_register_index(regSave);
+    mips_registers_vals[regSaveIndex] = (unsigned int)mips_registers_vals[regOpIndex] + (unsigned int)immediate;
 }
 
 void get_tokens(char *input) {
@@ -82,7 +116,7 @@ void get_tokens(char *input) {
     char operation[10];
     char reg1[10];
     char reg2[10];
-    char reg3[10];
+    char reg3[10] = "";
 
     //Copia cada token para as variáveis correspondentes
     if (token != NULL) {
@@ -100,17 +134,38 @@ void get_tokens(char *input) {
     if (token != NULL) {
         strcpy(reg3, token);
     }
+    
+    // Converte o valor imediato após verificar se ele está no lugar certo
+    int immediate = 0;
+    // tive que adicionar esse if pois LUI usa dois argumentos apenas e nisso dando o comando
+    // LUI $t9 255
+    // o valor imediato ia para o re2 e não reg3
+    if (strcmp(operation, "LUI") == 0) {
+        immediate = atoi(reg2);  // Para LUI, o imediato está em reg2
+    } else {
+        immediate = atoi(reg3);  // Para outras instruções, o imediato está em reg3
+    }
 
-    if(strcmp(operation, "ADD") == 0){
+    if (strcmp(operation, "ADD") == 0) {
         ADD(reg1, reg2, reg3);
-    }
-    if(strcmp(operation, "ADDI") == 0){
-        int imediate = atoi(reg3);
-        ADDI(reg1, reg2, imediate);
-    }
-    if(strcmp(operation, "MUL") == 0){
+    } else if (strcmp(operation, "ADDI") == 0) {
+        ADDI(reg1, reg2, immediate);
+    } else if (strcmp(operation, "ADDIU") == 0) {
+        ADDIU(reg1, reg2, immediate);
+    } else if (strcmp(operation, "ANDI") == 0) {
+        ANDI(reg1, reg2, immediate);
+    } else if (strcmp(operation, "ORI") == 0) {
+        ORI(reg1, reg2, immediate);
+    } else if (strcmp(operation, "XORI") == 0) {
+        XORI(reg1, reg2, immediate);
+    } else if (strcmp(operation, "SLTI") == 0) {
+        SLTI(reg1, reg2, immediate);
+    } else if (strcmp(operation, "LUI") == 0) {
+        LUI(reg1, immediate);
+    } else if (strcmp(operation, "MUL") == 0) {
         MUL(reg1, reg2, reg3);
     }
+
 }
 
 void print_registers() {
@@ -120,16 +175,31 @@ void print_registers() {
 }
 
 int main() {
-    
     char buffer[30];
-    printf("Digite seu comando: ");
-    fgets(buffer, sizeof(buffer), stdin);
     
-    mips_registers_vals[8] = 5; //Adiciona no registrador $t0 o numero 5
-    mips_registers_vals[9] = 2; //Adiciona no registrador $t1 o numero 2
-    //Chama a função para separar a operação e os registradores
-    get_tokens(buffer);
-    //Printa os registradores
-    print_registers();
+    // Inicializa alguns registradores com valores específicos
+    mips_registers_vals[8] = 5;  // $t0 = 5
+    mips_registers_vals[9] = 2;  // $t1 = 2
+    mips_registers_vals[10] = 8; // $t2 = 8
+
+    while (1) { // Loop infinito
+        printf("Digite seu comando (ou 'exit' para sair): ");
+        fgets(buffer, sizeof(buffer), stdin);
+
+        // Remove o caractere de nova linha '\n' do final do input
+        buffer[strcspn(buffer, "\n")] = 0;
+
+        // Verifica se o usuário digitou "exit"
+        if (strcmp(buffer, "exit") == 0) {
+            printf("Encerrando o programa.\n");
+            break;
+        }
+
+        // Chama a função para separar a operação e os registradores
+        get_tokens(buffer);
+
+        // Exibe os registradores após a execução do comando
+        print_registers();
+    }
     return 0;
 }
