@@ -32,6 +32,8 @@ int mips_registers_vals[32] = { 0 };
 
 int memory[1024] = { 0 };  // Simulação de memória com 1024 posições
 
+int PC = 0;     
+
 int find_register_index(char *input){
     int index_val;
     int i=0;
@@ -43,6 +45,28 @@ int find_register_index(char *input){
         ++i;
     }
     return index_val; 
+}
+
+// Implementação das operações Jump
+void J(int address) {
+    printf("JUMP: PC alterado de %d para %d\n", PC, address);
+    PC = address;
+}
+
+void JAL(int address) {
+    mips_registers_vals[31] = PC + 1; // Armazena o endereço de retorno no $ra
+    printf("JUMP AND LINK: $ra = %d, PC alterado de %d para %d\n", mips_registers_vals[31], PC, address);
+    PC = address;
+}
+
+void JR(char *reg) {
+    int regIndex = find_register_index(reg);
+    if (regIndex < 0) {
+        printf("Erro: Registrador inválido para JR.\n");
+        return;
+    }
+    printf("JUMP REGISTER: PC alterado de %d para %d\n", PC, mips_registers_vals[regIndex]);
+    PC = mips_registers_vals[regIndex];
 }
 
 void LW(char *regSave, char *regBase, int offset) {
@@ -217,6 +241,18 @@ void get_tokens(char *input) {
         immediate = atoi(reg3);
     }
 
+
+    // Adiciona suporte às operações J
+    if (strcmp(operation, "J") == 0) {
+        immediate = atoi(reg1); // Endereço é o primeiro argumento
+        J(immediate);
+    } else if (strcmp(operation, "JAL") == 0) {
+        immediate = atoi(reg1); // Endereço é o primeiro argumento
+        JAL(immediate);
+    } else if (strcmp(operation, "JR") == 0) {
+        JR(reg1);
+    }
+
     if (strcmp(operation, "LW") == 0) {
         LW(reg1, reg2, immediate);
     } else if (strcmp(operation, "SW") == 0) {
@@ -251,6 +287,7 @@ void print_registers() {
     for (int i = 0; i < 32; i++) {
         printf("Register %s Valor: %d\n", mips_registers[i], mips_registers_vals[i]);
     }
+    printf("PC: %d\n", PC); // Adiciona o valor do PC ao log
 }
 
 int main() {
